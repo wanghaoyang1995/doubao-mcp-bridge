@@ -81,11 +81,10 @@ F10:: {
     }
 
     cmd := Format(
-        '"{1}" "{2}" call',
+        'cmd /c ""{1}" "{2}" call"',
         PythonExe,
         BridgeScript
     )
-
     RunWait(cmd, , "Hide")
 
     if Trim(A_Clipboard) = "" {

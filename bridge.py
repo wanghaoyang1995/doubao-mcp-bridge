@@ -132,14 +132,71 @@ async def command_prompt() -> None:
     print("Prompt 已写入剪贴板。")
 
 
+async def call_mcp_tool(config: dict[str, Any], tool_name: str, arguments: dict[str, Any]) -> Any:
+    command = config["command"]
+    args = config.get("args", [])
+    env = config.get("env")
+
+    server_params = StdioServerParameters(
+        command=command,
+        args=args,
+        env=env
+    )
+
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments)
+            return result
+
+
 async def command_call() -> None:
-    # TODO:
     # 1. 从剪贴板读取 <MCP_CALL>...</MCP_CALL>
+    clipboard_content = pyperclip.paste()
+    # 立即清空剪贴板，若后续异常退出，外层AHK可判断
+    pyperclip.copy("")
+    
+    start_tag = "<MCP_CALL>"
+    end_tag = "</MCP_CALL>"
+    start_idx = clipboard_content.find(start_tag)
+    end_idx = clipboard_content.find(end_tag)
+    
+    if start_idx == -1 or end_idx == -1:
+        raise ValueError("剪贴板中未找到 <MCP_CALL>...</MCP_CALL>")
+    
+    mcp_call_json = clipboard_content[start_idx + len(start_tag):end_idx]
+    
     # 2. 解析 JSON
+    try:
+        mcp_call = json.loads(mcp_call_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"MCP_CALL JSON 解析失败: {e}")
+    
+    server_name = mcp_call.get("server")
+    tool_name = mcp_call.get("tool")
+    arguments = mcp_call.get("arguments", {})
+    
+    if not server_name or not tool_name:
+        raise ValueError("MCP_CALL 必须包含 server 和 tool 字段")
+    
     # 3. 根据 server/tool 路由到对应 MCP server
+    servers = load_servers_config()
+    if server_name not in servers:
+        raise ValueError(f"未找到服务器配置: {server_name}")
+    
+    config = servers[server_name]
+    
     # 4. call_tool()
+    try:
+        result = await call_mcp_tool(config, tool_name, arguments)
+    except Exception as e:
+        result = {"error": str(e)}
+    
     # 5. 将 <MCP_RESULT>...</MCP_RESULT> 写回剪贴板
-    raise NotImplementedError("call 功能尚未实现。")
+    result_str = json.dumps(result.content[0].text, ensure_ascii=False)
+    mcp_result = f"<MCP_RESULT>{result_str}</MCP_RESULT>"
+    pyperclip.copy(mcp_result)
+    # print("MCP_RESULT 已写入剪贴板。")
 
 
 async def main() -> None:

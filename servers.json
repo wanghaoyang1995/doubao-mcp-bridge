@@ -2,7 +2,7 @@
   "mcpServers": {
     "anki-mcp": {
       "command": "cmd",
-      "args": ["/c", "npx", "-y", "@ankimcp/anki-mcp-server", "--stdio", "--read-only"],
+      "args": ["/c", "npx", "-y", "@ankimcp/anki-mcp-server", "--stdio"],
       "env": {
         "ANKI_CONNECT_URL": "http://localhost:8765"
       }
