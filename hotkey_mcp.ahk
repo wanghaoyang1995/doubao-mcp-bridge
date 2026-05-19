@@ -75,8 +75,8 @@ F10:: {
         return
     }
 
-    if !InStr(A_Clipboard, "<MCP_CALL>") {
-        Tip("剪贴板中未检测到 <MCP_CALL>")
+    if !InStr(A_Clipboard, "MCP_CALL_JSON") {
+        Tip("剪贴板中未检测到 MCP_CALL_JSON")
         return
     }
 
@@ -92,8 +92,8 @@ F10:: {
         return
     }
 
-    if !InStr(A_Clipboard, "<MCP_RESULT>") {
-        Tip("未检测到 <MCP_RESULT>")
+    if !InStr(A_Clipboard, "MCP_RESULT_JSON") {
+        Tip("未检测到 MCP_RESULT_JSON")
         return
     }
 

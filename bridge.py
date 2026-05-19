@@ -81,15 +81,16 @@ def build_prompt(tools_info: list[dict[str, Any]]) -> str:
     lines.append("")
     lines.append("当你判断需要调用本地工具时，必须只输出以下格式，不要输出任何解释、寒暄、Markdown 或代码块：")
     lines.append("")
-    lines.append('<MCP_CALL>{"server":"服务器名","tool":"工具名","arguments":{}}</MCP_CALL>')
+    lines.append('MCP_CALL_JSON: {"server":"服务器名","tool":"工具名","arguments":{}}')
     lines.append("")
     lines.append("调用规则：")
-    lines.append("1. 只有确实需要本地工具时才输出 MCP_CALL。")
-    lines.append("2. 输出 MCP_CALL 时，只输出这一段，不要附加任何自然语言。")
-    lines.append("3. 等用户返回 <MCP_RESULT> 后，再根据结果自然语言回答。")
+    lines.append("1. 只有确实需要本地工具时才输出 MCP_CALL_JSON。")
+    lines.append("2. 输出 MCP_CALL_JSON 时，只输出这一行，不要附加任何自然语言。")
+    lines.append("3. 等用户返回 MCP_RESULT_JSON 后，再根据结果自然语言回答。")
     lines.append("4. 不要伪造工具结果。")
     lines.append("5. 一次只允许调用一个工具。")
-    lines.append("6. arguments 必须严格符合对应工具的 inputSchema。")
+    lines.append("6. 必须严格输出 MCP_CALL_JSON: 开头，后面紧跟合法JSON，不允许省略前缀。")
+    lines.append("7. arguments 必须严格符合对应工具的 inputSchema。")
     lines.append("")
     lines.append("当前可用 MCP 工具如下：")
     lines.append("")
@@ -151,50 +152,48 @@ async def call_mcp_tool(config: dict[str, Any], tool_name: str, arguments: dict[
 
 
 async def command_call() -> None:
-    # 1. 从剪贴板读取 <MCP_CALL>...</MCP_CALL>
+    # 1. 从剪贴板读取 MCP_CALL_JSON
     clipboard_content = pyperclip.paste()
     # 立即清空剪贴板，若后续异常退出，外层AHK可判断
     pyperclip.copy("")
-    
-    start_tag = "<MCP_CALL>"
-    end_tag = "</MCP_CALL>"
-    start_idx = clipboard_content.find(start_tag)
-    end_idx = clipboard_content.find(end_tag)
-    
-    if start_idx == -1 or end_idx == -1:
-        raise ValueError("剪贴板中未找到 <MCP_CALL>...</MCP_CALL>")
-    
-    mcp_call_json = clipboard_content[start_idx + len(start_tag):end_idx]
-    
+
+    prefix = "MCP_CALL_JSON:"
+    prefix_idx = clipboard_content.find(prefix)
+
+    if prefix_idx == -1:
+        raise ValueError("剪贴板中未找到 MCP_CALL_JSON")
+
+    mcp_call_json = clipboard_content[prefix_idx + len(prefix):].strip()
+
     # 2. 解析 JSON
     try:
         mcp_call = json.loads(mcp_call_json)
     except json.JSONDecodeError as e:
         raise ValueError(f"MCP_CALL JSON 解析失败: {e}")
-    
+
     server_name = mcp_call.get("server")
     tool_name = mcp_call.get("tool")
     arguments = mcp_call.get("arguments", {})
-    
+
     if not server_name or not tool_name:
         raise ValueError("MCP_CALL 必须包含 server 和 tool 字段")
-    
+
     # 3. 根据 server/tool 路由到对应 MCP server
     servers = load_servers_config()
     if server_name not in servers:
         raise ValueError(f"未找到服务器配置: {server_name}")
-    
+
     config = servers[server_name]
-    
+
     # 4. call_tool()
     try:
         result = await call_mcp_tool(config, tool_name, arguments)
     except Exception as e:
         result = {"error": str(e)}
-    
-    # 5. 将 <MCP_RESULT>...</MCP_RESULT> 写回剪贴板
+
+    # 5. 将 MCP_RESULT_JSON 写回剪贴板
     result_str = json.dumps(result.content[0].text, ensure_ascii=False)
-    mcp_result = f"<MCP_RESULT>{result_str}</MCP_RESULT>"
+    mcp_result = f"MCP_RESULT_JSON: {result_str}"
     pyperclip.copy(mcp_result)
     # print("MCP_RESULT 已写入剪贴板。")
 
